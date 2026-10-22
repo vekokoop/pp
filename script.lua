@@ -1,4 +1,4 @@
--- Tribes 3v3 VIP Script Hub v4 (No-Overlap + Advanced Team Check + Smooth Prediction Aimbot)
+-- Tribes 3v3 VIP Script Hub v5 (Fixed ESP Colors & Responsive Aimbot)
 
 ---------------------------------------------------------
 -- 0. تنظيف أي سكربت أو واجهة سابقة لمنع التداخل
@@ -23,7 +23,7 @@ for _, v in pairs(game:GetService("CoreGui"):GetChildren()) do
 end
 
 ---------------------------------------------------------
--- 1. المزامنة عند التنقل
+-- 1. المزامنة عند التنقل بين الماب واللوبي
 ---------------------------------------------------------
 local queue_on_teleport = (syn and syn.queue_on_teleport) or queue_on_teleport or (fluxus and fluxus.queue_on_teleport)
 if queue_on_teleport then
@@ -42,7 +42,7 @@ local Window = OrionLib:MakeWindow({
 })
 
 ---------------------------------------------------------
--- 3. إنشاء الأيقونة العائمة القابلة للسحب
+-- 3. الأيقونة العائمة القابلة للسحب
 ---------------------------------------------------------
 local ScreenGui = Instance.new("ScreenGui")
 local ToggleButton = Instance.new("TextButton")
@@ -74,21 +74,16 @@ ToggleButton.MouseButton1Click:Connect(function()
 end)
 
 ---------------------------------------------------------
--- دالة التحقق الذكي من الفرق (Smart Team Check)
+-- دالة التحقق من الفرق (Smart Team Check)
 ---------------------------------------------------------
 local function isTeammate(player)
     if player == LocalPlayer then return true end
-    
-    -- فحص نظام الفرق الأسبوعي والافتراضي
     if player.Team and LocalPlayer.Team then
         return player.Team == LocalPlayer.Team
     end
-    
-    -- فحص ألوان وشعار الفريق داخل الشخصية إذا لم يتوفر نظام الفرق المباشر
     if player.TeamColor and LocalPlayer.TeamColor then
         return player.TeamColor == LocalPlayer.TeamColor
     end
-
     return false
 end
 
@@ -165,11 +160,11 @@ local function applyESP()
                 highlight.Parent = player.Character
             end
 
-            -- تلوين الفريق بالأخضر والأعداء بالأحمر
+            -- الخصم أحمر والتيم أخضر تماماً حسب طلبك
             if isTeammate(player) then
-                highlight.FillColor = Color3.fromRGB(0, 255, 120) -- فريقك
+                highlight.FillColor = Color3.fromRGB(0, 255, 0)   -- أخضر للتيم
             else
-                highlight.FillColor = Color3.fromRGB(255, 30, 30)  -- الأعداء
+                highlight.FillColor = Color3.fromRGB(255, 0, 0)   -- أحمر للخصم
             end
             highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
             highlight.Enabled = true
@@ -193,7 +188,7 @@ local espConnection = RunService.Stepped:Connect(function()
 end)
 
 ---------------------------------------------------------
--- TAB 3: مساعد التصويب الذكي (Safe Aimbot)
+-- TAB 3: مساعد التصويب السريع (Aimbot)
 ---------------------------------------------------------
 local AimbotTab = Window:MakeTab({
     Name = "مساعد التصويب",
@@ -203,7 +198,6 @@ local AimbotTab = Window:MakeTab({
 
 local AimbotEnabled = false
 local FOV_Radius = 150
-local Smoothness = 0.25 -- نعومة وحماية من الباند
 
 local Drawing = Drawing or import("drawing_lib")
 local fovCircle = nil
@@ -259,7 +253,7 @@ AimbotTab:AddButton({
     end
 })
 
--- البحث عن الهدف مع توقّع حركة الأعداء واستثناء التيم
+-- البحث الفوري عن الأعداء واستثناء التيم بدقة
 local function getClosestEnemyTarget()
     local closestTarget = nil
     local maxDistance = FOV_Radius
@@ -277,12 +271,7 @@ local function getClosestEnemyTarget()
 
                     if dist < maxDistance then
                         maxDistance = dist
-                        
-                        -- حساب موقع الهدف المتوقع بناءً على سرعة حركته (Prediction)
-                        local velocity = targetPart.AssemblyLinearVelocity or Vector3.new(0,0,0)
-                        local predictedPosition = targetPart.Position + (velocity * 0.045)
-                        
-                        closestTarget = predictedPosition
+                        closestTarget = targetPart.Position
                     end
                 end
             end
@@ -295,14 +284,13 @@ local aimConnection = RunService.RenderStepped:Connect(function()
     if AimbotEnabled then
         local targetPos = getClosestEnemyTarget()
         if targetPos then
-            -- توجيه الكاميرا بنعومة (Lerp) لضمان الدقة والحماية من حظر اللعبة
-            local targetCFrame = CFrame.new(Camera.CFrame.Position, targetPos)
-            Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, Smoothness)
+            -- توجيه مباشر وسريع ومستقر للعدو بدون أي عوائق
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPos)
         end
     end
 end)
 
--- تسجيل دالة التنظيف للحفاظ على استقرار اللعبة عند إعادة التشغيل
+-- تنظيف العمليات عند الخروج أو إعادة التحميل
 _G.TribesVIP_Cleanup = function()
     if espConnection then espConnection:Disconnect() end
     if aimConnection then aimConnection:Disconnect() end
