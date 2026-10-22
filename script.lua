@@ -1,4 +1,4 @@
--- Tribes 3v3 VIP Script Hub v5 (Fixed ESP Colors & Responsive Aimbot)
+-- Tribes 3v3 VIP Script Hub v8 (Fixed Team Detection & Working Aimbot)
 
 ---------------------------------------------------------
 -- 0. تنظيف أي سكربت أو واجهة سابقة لمنع التداخل
@@ -15,12 +15,14 @@ local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
--- مسح الهايلايت والواجهات القديمة من الشاشة
-for _, v in pairs(game:GetService("CoreGui"):GetChildren()) do
-    if v.Name == "VIP_FloatingToggle" or v.Name == "Orion" then
-        v:Destroy()
+-- مسح الهايلايت والواجهات القديمة بأمان
+pcall(function()
+    for _, v in pairs(game:GetService("CoreGui"):GetChildren()) do
+        if v.Name == "VIP_FloatingToggle" or v.Name == "Orion" then
+            v:Destroy()
+        end
     end
-end
+end)
 
 ---------------------------------------------------------
 -- 1. المزامنة عند التنقل بين الماب واللوبي
@@ -49,7 +51,10 @@ local ToggleButton = Instance.new("TextButton")
 local UICorner = Instance.new("UICorner")
 
 ScreenGui.Name = "VIP_FloatingToggle"
-ScreenGui.Parent = (gethui and gethui()) or game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui")
+local successGui, targetGui = pcall(function()
+    return gethui()
+end)
+ScreenGui.Parent = (successGui and targetGui) or game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui")
 
 ToggleButton.Name = "ToggleButton"
 ToggleButton.Parent = ScreenGui
@@ -67,23 +72,23 @@ UICorner.CornerRadius = UDim.new(1, 0)
 UICorner.Parent = ToggleButton
 
 ToggleButton.MouseButton1Click:Connect(function()
-    local OrionGui = game:GetService("CoreGui"):FindFirstChild("Orion") or (gethui and gethui():FindFirstChild("Orion"))
-    if OrionGui then
-        OrionGui.Enabled = not OrionGui.Enabled
-    end
+    pcall(function()
+        local OrionGui = game:GetService("CoreGui"):FindFirstChild("Orion") or (gethui and gethui():FindFirstChild("Orion"))
+        if OrionGui then
+            OrionGui.Enabled = not OrionGui.Enabled
+        end
+    end)
 end)
 
 ---------------------------------------------------------
--- دالة التحقق من الفرق (Smart Team Check)
+-- دالة التحقق الذكي من الفرق (تم حل مشكلة الـ nil)
 ---------------------------------------------------------
 local function isTeammate(player)
     if player == LocalPlayer then return true end
     if player.Team and LocalPlayer.Team then
         return player.Team == LocalPlayer.Team
     end
-    if player.TeamColor and LocalPlayer.TeamColor then
-        return player.TeamColor == LocalPlayer.TeamColor
-    end
+    -- إذا لم تكن هناك فرق روبلوكس رسمية، نعتبر البقية أعداء ليعمل الكشف والأيم بوت
     return false
 end
 
@@ -127,7 +132,7 @@ MainTab:AddSlider({
 })
 
 ---------------------------------------------------------
--- TAB 2: كشف الأماكن (ESP)
+-- TAB 2: كشف الأماكن (ESP) - (الخصم أحمر والتيم أخضر)
 ---------------------------------------------------------
 local VisualTab = Window:MakeTab({
     Name = "كشف الأماكن",
@@ -160,7 +165,7 @@ local function applyESP()
                 highlight.Parent = player.Character
             end
 
-            -- الخصم أحمر والتيم أخضر تماماً حسب طلبك
+            -- تيمك أخضر والخصم أحمر
             if isTeammate(player) then
                 highlight.FillColor = Color3.fromRGB(0, 255, 0)   -- أخضر للتيم
             else
@@ -188,7 +193,7 @@ local espConnection = RunService.Stepped:Connect(function()
 end)
 
 ---------------------------------------------------------
--- TAB 3: مساعد التصويب السريع (Aimbot)
+-- TAB 3: مساعد التصويب الفوري (Aimbot)
 ---------------------------------------------------------
 local AimbotTab = Window:MakeTab({
     Name = "مساعد التصويب",
@@ -199,18 +204,20 @@ local AimbotTab = Window:MakeTab({
 local AimbotEnabled = false
 local FOV_Radius = 150
 
-local Drawing = Drawing or import("drawing_lib")
+local DrawingLib = (typeof(Drawing) == "table" and Drawing) or nil
 local fovCircle = nil
 
-if Drawing then
-    fovCircle = Drawing.new("Circle")
-    fovCircle.Visible = false
-    fovCircle.Radius = FOV_Radius
-    fovCircle.Color = Color3.fromRGB(255, 215, 0)
-    fovCircle.Thickness = 1.5
-    fovCircle.Filled = false
-    fovCircle.Transparency = 0.8
-    fovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+if DrawingLib then
+    pcall(function()
+        fovCircle = DrawingLib.new("Circle")
+        fovCircle.Visible = false
+        fovCircle.Radius = FOV_Radius
+        fovCircle.Color = Color3.fromRGB(255, 215, 0)
+        fovCircle.Thickness = 1.5
+        fovCircle.Filled = false
+        fovCircle.Transparency = 0.8
+        fovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    end)
 
     RunService.RenderStepped:Connect(function()
         if fovCircle then
@@ -253,7 +260,7 @@ AimbotTab:AddButton({
     end
 })
 
--- البحث الفوري عن الأعداء واستثناء التيم بدقة
+-- دالة البحث عن أقرب عدو داخل الدائرة واستثناء التيم
 local function getClosestEnemyTarget()
     local closestTarget = nil
     local maxDistance = FOV_Radius
@@ -284,7 +291,6 @@ local aimConnection = RunService.RenderStepped:Connect(function()
     if AimbotEnabled then
         local targetPos = getClosestEnemyTarget()
         if targetPos then
-            -- توجيه مباشر وسريع ومستقر للعدو بدون أي عوائق
             Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPos)
         end
     end
@@ -295,8 +301,10 @@ _G.TribesVIP_Cleanup = function()
     if espConnection then espConnection:Disconnect() end
     if aimConnection then aimConnection:Disconnect() end
     removeESP()
-    if fovCircle then fovCircle:Remove() end
-    ScreenGui:Destroy()
+    if fovCircle then
+        pcall(function() fovCircle:Remove() end)
+    end
+    pcall(function() ScreenGui:Destroy() end)
 end
 
 OrionLib:Init()
