@@ -1,12 +1,38 @@
--- Tribes 3v3 VIP Script Hub v3 (Mobile Optimized & Team Check Fixed)
+-- Tribes 3v3 VIP Script Hub v4 (No-Overlap + Advanced Team Check + Smooth Prediction Aimbot)
 
--- 1. المزامنة عند الانتقال
-local queue_on_teleport = (syn and syn.queue_on_teleport) or queue_on_teleport or (fluxus and fluxus.queue_on_teleport)
-if queue_on_teleport then
-    queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/vekokoop/op/refs/heads/main/script.lua", true))()')
+---------------------------------------------------------
+-- 0. تنظيف أي سكربت أو واجهة سابقة لمنع التداخل
+---------------------------------------------------------
+if _G.TribesVIP_Loaded then
+    if _G.TribesVIP_Cleanup then
+        pcall(_G.TribesVIP_Cleanup)
+    end
+end
+_G.TribesVIP_Loaded = true
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+-- مسح الهايلايت والواجهات القديمة من الشاشة
+for _, v in pairs(game:GetService("CoreGui"):GetChildren()) do
+    if v.Name == "VIP_FloatingToggle" or v.Name == "Orion" then
+        v:Destroy()
+    end
 end
 
+---------------------------------------------------------
+-- 1. المزامنة عند التنقل
+---------------------------------------------------------
+local queue_on_teleport = (syn and syn.queue_on_teleport) or queue_on_teleport or (fluxus and fluxus.queue_on_teleport)
+if queue_on_teleport then
+    queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/vekokoop/pp/refs/heads/main/script.lua", true))()')
+end
+
+---------------------------------------------------------
 -- 2. تحميل مكتبة الواجهة
+---------------------------------------------------------
 local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/jensonhirst/Orion/main/source"))()
 local Window = OrionLib:MakeWindow({
     Name = "Tribes 3v3 - VIP Hub 👑",
@@ -15,13 +41,8 @@ local Window = OrionLib:MakeWindow({
     ConfigFolder = "TribesVIP"
 })
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local Camera = workspace.CurrentCamera
-local LocalPlayer = Players.LocalPlayer
-
 ---------------------------------------------------------
--- إنشاء زر عائم متحرك يدعم السحب
+-- 3. إنشاء الأيقونة العائمة القابلة للسحب
 ---------------------------------------------------------
 local ScreenGui = Instance.new("ScreenGui")
 local ToggleButton = Instance.new("TextButton")
@@ -46,14 +67,30 @@ UICorner.CornerRadius = UDim.new(1, 0)
 UICorner.Parent = ToggleButton
 
 ToggleButton.MouseButton1Click:Connect(function()
-    if OrionLib then
-        -- تبديل حالة ظهور القائمة
-        local OrionGui = game:GetService("CoreGui"):FindFirstChild("Orion") or (gethui and gethui():FindFirstChild("Orion"))
-        if OrionGui then
-            OrionGui.Enabled = not OrionGui.Enabled
-        end
+    local OrionGui = game:GetService("CoreGui"):FindFirstChild("Orion") or (gethui and gethui():FindFirstChild("Orion"))
+    if OrionGui then
+        OrionGui.Enabled = not OrionGui.Enabled
     end
 end)
+
+---------------------------------------------------------
+-- دالة التحقق الذكي من الفرق (Smart Team Check)
+---------------------------------------------------------
+local function isTeammate(player)
+    if player == LocalPlayer then return true end
+    
+    -- فحص نظام الفرق الأسبوعي والافتراضي
+    if player.Team and LocalPlayer.Team then
+        return player.Team == LocalPlayer.Team
+    end
+    
+    -- فحص ألوان وشعار الفريق داخل الشخصية إذا لم يتوفر نظام الفرق المباشر
+    if player.TeamColor and LocalPlayer.TeamColor then
+        return player.TeamColor == LocalPlayer.TeamColor
+    end
+
+    return false
+end
 
 ---------------------------------------------------------
 -- TAB 1: حركة اللاعب
@@ -95,7 +132,7 @@ MainTab:AddSlider({
 })
 
 ---------------------------------------------------------
--- TAB 2: كشف الأعداء والفريق (ESP)
+-- TAB 2: كشف الأماكن (ESP)
 ---------------------------------------------------------
 local VisualTab = Window:MakeTab({
     Name = "كشف الأماكن",
@@ -105,7 +142,20 @@ local VisualTab = Window:MakeTab({
 
 local ESP_Enabled = false
 
+local function removeESP()
+    for _, p in pairs(Players:GetPlayers()) do
+        if p.Character and p.Character:FindFirstChild("ESP_Highlight") then
+            p.Character.ESP_Highlight:Destroy()
+        end
+    end
+end
+
 local function applyESP()
+    if not ESP_Enabled then 
+        removeESP()
+        return 
+    end
+
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
             local highlight = player.Character:FindFirstChild("ESP_Highlight")
@@ -115,14 +165,14 @@ local function applyESP()
                 highlight.Parent = player.Character
             end
 
-            -- تمييز الأعداء باللون الأحمر والفريق باللون الأخضر
-            if player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
-                highlight.FillColor = Color3.fromRGB(0, 255, 0) -- أخضر للفريق
+            -- تلوين الفريق بالأخضر والأعداء بالأحمر
+            if isTeammate(player) then
+                highlight.FillColor = Color3.fromRGB(0, 255, 120) -- فريقك
             else
-                highlight.FillColor = Color3.fromRGB(255, 0, 0) -- أحمر للأعداء
+                highlight.FillColor = Color3.fromRGB(255, 30, 30)  -- الأعداء
             end
             highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-            highlight.Enabled = ESP_Enabled
+            highlight.Enabled = true
         end
     end
 end
@@ -136,22 +186,14 @@ VisualTab:AddToggle({
     end
 })
 
--- إعادة تطبيق الـ ESP تلقائياً عند تجدد اللاعبين أو بدء جول جديدة
-Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function()
-        task.wait(1)
-        if ESP_Enabled then applyESP() end
-    end)
-end)
-
-RunService.Stepped:Connect(function()
+local espConnection = RunService.Stepped:Connect(function()
     if ESP_Enabled then
         applyESP()
     end
 end)
 
 ---------------------------------------------------------
--- TAB 3: مساعد التصويب والـ FOV
+-- TAB 3: مساعد التصويب الذكي (Safe Aimbot)
 ---------------------------------------------------------
 local AimbotTab = Window:MakeTab({
     Name = "مساعد التصويب",
@@ -161,6 +203,7 @@ local AimbotTab = Window:MakeTab({
 
 local AimbotEnabled = false
 local FOV_Radius = 150
+local Smoothness = 0.25 -- نعومة وحماية من الباند
 
 local Drawing = Drawing or import("drawing_lib")
 local fovCircle = nil
@@ -200,7 +243,6 @@ AimbotTab:AddToggle({
     end
 })
 
--- خيارات حجم الدائرة بأزرار مخصصة لتسهيل التحكم على الموبايل
 AimbotTab:AddButton({
     Name = "تكبير دائرة FOV (+25)",
     Callback = function()
@@ -217,33 +259,30 @@ AimbotTab:AddButton({
     end
 })
 
--- البحث عن أقرب هدف (استثناء أعضاء الفريق)
-local function getClosestTarget()
+-- البحث عن الهدف مع توقّع حركة الأعداء واستثناء التيم
+local function getClosestEnemyTarget()
     local closestTarget = nil
     local maxDistance = FOV_Radius
 
     for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            -- تحقق من عدم وجود الهدف في نفس الفريق
-            local isEnemy = true
-            if player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
-                isEnemy = false
-            end
+        if player ~= LocalPlayer and not isTeammate(player) and player.Character then
+            local targetPart = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
 
-            if isEnemy then
-                local targetPart = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
-                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            if targetPart and humanoid and humanoid.Health > 0 then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                if onScreen then
+                    local centerScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - centerScreen).Magnitude
 
-                if targetPart and humanoid and humanoid.Health > 0 then
-                    local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-                    if onScreen then
-                        local centerScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-                        local dist = (Vector2.new(screenPos.X, screenPos.Y) - centerScreen).Magnitude
-
-                        if dist < maxDistance then
-                            maxDistance = dist
-                            closestTarget = targetPart
-                        end
+                    if dist < maxDistance then
+                        maxDistance = dist
+                        
+                        -- حساب موقع الهدف المتوقع بناءً على سرعة حركته (Prediction)
+                        local velocity = targetPart.AssemblyLinearVelocity or Vector3.new(0,0,0)
+                        local predictedPosition = targetPart.Position + (velocity * 0.045)
+                        
+                        closestTarget = predictedPosition
                     end
                 end
             end
@@ -252,13 +291,24 @@ local function getClosestTarget()
     return closestTarget
 end
 
-RunService.RenderStepped:Connect(function()
+local aimConnection = RunService.RenderStepped:Connect(function()
     if AimbotEnabled then
-        local target = getClosestTarget()
-        if target then
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+        local targetPos = getClosestEnemyTarget()
+        if targetPos then
+            -- توجيه الكاميرا بنعومة (Lerp) لضمان الدقة والحماية من حظر اللعبة
+            local targetCFrame = CFrame.new(Camera.CFrame.Position, targetPos)
+            Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, Smoothness)
         end
     end
 end)
+
+-- تسجيل دالة التنظيف للحفاظ على استقرار اللعبة عند إعادة التشغيل
+_G.TribesVIP_Cleanup = function()
+    if espConnection then espConnection:Disconnect() end
+    if aimConnection then aimConnection:Disconnect() end
+    removeESP()
+    if fovCircle then fovCircle:Remove() end
+    ScreenGui:Destroy()
+end
 
 OrionLib:Init()
